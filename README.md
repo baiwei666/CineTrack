@@ -100,3 +100,12 @@ npm run dev
 2.  创建一个新的 **React + TypeScript + Tailwind** 项目模板。
 3.  安装依赖 `lucide-react`。
 4.  将代码复制到主组件文件中即可。
+
+
+### 截图
+<img width="1861" height="835" alt="image" src="https://github.com/user-attachments/assets/e6e73439-afca-4534-9981-f9730694414a" />
+<img width="1841" height="855" alt="image" src="https://github.com/user-attachments/assets/c4409db1-c6cb-4605-a67a-db082f4017e7" />
+<img width="1698" height="703" alt="image" src="https://github.com/user-attachments/assets/1f929d15-4ff5-4200-beff-13bb11cbeb09" />
+
+
+
