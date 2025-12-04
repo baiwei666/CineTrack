@@ -29,7 +29,12 @@ import {
   ExternalLink,
   User,
   Tag,
-  Hash
+  Hash,
+  Sparkles,
+  Quote,
+  Lightbulb,
+  Files,
+  AlertTriangle
 } from 'lucide-react';
 
 /**
@@ -66,6 +71,15 @@ interface AppSettings {
   aiProvider: 'Mock' | 'OpenAI' | 'Gemini' | 'DeepSeek';
   aiApiKey: string;
   aiModel: string;
+}
+
+interface AiAnalysisResult {
+  keywords: string[];
+  analysis: string;
+  recommendations: {
+    title: string;
+    reason: string;
+  }[];
 }
 
 /**
@@ -150,10 +164,8 @@ const DonutChart = ({ data }: { data: { label: string; value: number; color: str
 
 /**
  * 组件: 设置模态框
- * (移动到顶部定义，防止提升问题，并修复 Hooks 规则)
  */
 const SettingsModal = ({ onClose, onSave, initialSettings, movies, setMovies }: any) => {
-    // 移除 if (!isOpen) return null; 以遵守 Hooks 规则
     const [localSettings, setLocalSettings] = useState(initialSettings);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -246,8 +258,55 @@ const SettingsModal = ({ onClose, onSave, initialSettings, movies, setMovies }: 
 };
 
 /**
+ * 组件: 删除确认模态框
+ */
+const DeleteConfirmModal = ({ 
+  movie, 
+  onClose, 
+  onConfirm 
+}: { 
+  movie: MovieRecord | null, 
+  onClose: () => void, 
+  onConfirm: () => void 
+}) => {
+  if (!movie) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-800 rounded-2xl w-full max-w-sm border border-red-500/30 shadow-2xl p-6">
+        <div className="flex flex-col items-center text-center space-y-4">
+          <div className="p-3 bg-red-500/10 rounded-full">
+            <AlertTriangle className="text-red-500" size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-white mb-2">确认删除记录?</h3>
+            <p className="text-sm text-slate-400">
+              您即将删除影片 <span className="text-white font-medium">《{movie.title}》</span>
+              <br />此操作无法撤销。
+            </p>
+          </div>
+          <div className="flex gap-3 w-full pt-2">
+            <button 
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition text-sm font-medium"
+            >
+              取消
+            </button>
+            <button 
+              onClick={onConfirm}
+              className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl transition text-sm font-medium shadow-lg shadow-red-900/20"
+            >
+              确认删除
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * 组件: 添加/编辑模态框
- * (修复 Hooks 规则)
  */
 const AddEditModal = ({ 
   onClose, 
@@ -260,7 +319,6 @@ const AddEditModal = ({
   editingMovie: MovieRecord | null;
   appSettings: AppSettings;
 }) => {
-  // 移除 if (!isOpen) return null; 以遵守 Hooks 规则
   
   const [formData, setFormData] = useState<Partial<MovieRecord>>(
     editingMovie || {
@@ -274,7 +332,6 @@ const AddEditModal = ({
     }
   );
   
-  // 重置表单当 editingMovie 改变时
   useEffect(() => {
     if (editingMovie) {
         setFormData(editingMovie);
@@ -296,7 +353,6 @@ const AddEditModal = ({
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   const searchTimeoutRef = useRef<any>(null);
 
-  // 搜索 TMDB 摘要列表
   const searchTMDB = async (query: string) => {
     setIsSearching(true);
     try {
@@ -320,20 +376,15 @@ const AddEditModal = ({
     }
   };
 
-  // 获取 TMDB 详细信息 (Credits, Runtime, Genres)
   const fetchTMDBDetails = async (id: number, mediaType: 'movie' | 'tv') => {
     setIsFetchingDetails(true);
     try {
       const response = await fetch(`https://api.themoviedb.org/3/${mediaType}/${id}?api_key=${appSettings.tmdbApiKey}&language=zh-CN&append_to_response=credits`);
       const data = await response.json();
       
-      // 处理导演
       const director = data.credits?.crew?.find((p: any) => p.job === 'Director')?.name || '';
-      // 处理演员 (前5位)
       const actors = data.credits?.cast?.slice(0, 5).map((p: any) => p.name) || [];
-      // 处理类型 (Genres -> Tags)
       const tags = data.genres?.map((g: any) => g.name) || [];
-      // 处理时长
       const duration = mediaType === 'movie' ? data.runtime : (data.episode_run_time?.[0] || 0);
 
       return { director, actors, tags, duration, overview: data.overview, poster_path: data.poster_path, title: mediaType === 'movie' ? data.title : data.name, original_title: mediaType === 'movie' ? data.original_title : data.original_name, year: new Date(mediaType === 'movie' ? data.release_date : data.first_air_date).getFullYear(), vote_average: data.vote_average };
@@ -357,13 +408,11 @@ const AddEditModal = ({
 
   const selectMovie = async (item: any) => {
     if (!appSettings.tmdbApiKey) {
-      // Mock 逻辑
       setFormData(prev => ({ ...prev, ...item, tags: item.tags || [], comment: item.comment || '' }));
       setSearchSuggestions([]);
       return;
     }
 
-    // 真实 API 逻辑：先获取详情
     const details = await fetchTMDBDetails(item.id, item.media_type);
     if (details) {
       setFormData(prev => ({
@@ -398,7 +447,6 @@ const AddEditModal = ({
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Search Section */}
           {!editingMovie && (
             <div className="relative z-20">
               <label className="block text-sm font-medium text-slate-400 mb-1 flex justify-between">
@@ -596,6 +644,10 @@ export default function CineTrackApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMovie, setEditingMovie] = useState<MovieRecord | null>(null);
   
+  // 新增状态
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [movieToDelete, setMovieToDelete] = useState<MovieRecord | null>(null);
+  
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     type: 'All',
@@ -610,7 +662,7 @@ export default function CineTrackApp() {
     aiModel: 'gpt-3.5-turbo'
   });
 
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<AiAnalysisResult | string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // 初始化加载
@@ -670,13 +722,45 @@ export default function CineTrackApp() {
     setEditingMovie(null);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('确定要删除?')) setMovies(movies.filter(m => m.id !== id));
+  // 修改：触发删除时，仅设置状态，不直接删除
+  const triggerDelete = (movie: MovieRecord) => {
+    setMovieToDelete(movie);
   };
+
+  // 确认删除
+  const confirmDelete = () => {
+    if (movieToDelete) {
+      setMovies(movies.filter(m => m.id !== movieToDelete.id));
+      setMovieToDelete(null);
+    }
+  };
+
+  // --- Duplicate Logic ---
+  const duplicateIds = useMemo(() => {
+    const lookup = new Map<string, string[]>();
+    movies.forEach(m => {
+        // 标准化标题：转小写，仅保留中文、字母和数字
+        const key = m.title.toLowerCase().replace(/[^\w\u4e00-\u9fa5]/g, '');
+        if (!lookup.has(key)) lookup.set(key, []);
+        lookup.get(key)?.push(m.id);
+    });
+    const result = new Set<string>();
+    for (const ids of lookup.values()) {
+        if (ids.length > 1) ids.forEach(id => result.add(id));
+    }
+    return result;
+  }, [movies]);
 
   // --- Filtering Logic (Expanded) ---
   const filteredMovies = useMemo(() => {
-    return movies
+    let result = movies;
+
+    // 查重模式优先
+    if (showDuplicates) {
+        return result.filter(m => duplicateIds.has(m.id)).sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    return result
       .filter(m => {
         const searchLower = filters.search.toLowerCase();
         // 搜索匹配：标题、演员、导演、类型
@@ -700,7 +784,7 @@ export default function CineTrackApp() {
           default: return 0;
         }
       });
-  }, [movies, filters]);
+  }, [movies, filters, showDuplicates, duplicateIds]);
 
   // 获取所有唯一的 Tags 供筛选
   const allTags = useMemo(() => {
@@ -757,26 +841,47 @@ export default function CineTrackApp() {
     }
 
     try {
-        const movieDataStr = movies.slice(0, 30).map(m => // Limit context size
+        const movieDataStr = movies.slice(0, 30).map(m => 
             `《${m.title}》- ${m.rating}分, 类型:${m.tags.join('/')}, 导演:${m.director}`
         ).join('\n');
 
-        const systemPrompt = `你是一位专业影评人。请根据用户的观影记录（标题/评分/类型/导演），生成一份简短的分析报告：
-1. 观影口味关键词。
-2. 偏好深度解析（喜欢的题材或导演风格）。
-3. 推荐3部未看过的类似佳作。`;
+        // 更新 System Prompt 以请求 JSON 格式
+        const systemPrompt = `你是一位资深电影评论家。请根据用户的观影记录，生成一份 JSON 格式的分析报告。
+不要包含 markdown 代码块标记，直接返回纯 JSON 字符串。
+JSON 结构如下：
+{
+  "keywords": ["关键词1", "关键词2", "关键词3", "关键词4"],
+  "analysis": "这里是深度分析文本，请保持段落清晰，语言风趣幽默且富有洞察力。",
+  "recommendations": [
+    { "title": "推荐影片1", "reason": "推荐理由1" },
+    { "title": "推荐影片2", "reason": "推荐理由2" },
+    { "title": "推荐影片3", "reason": "推荐理由3" }
+  ]
+}`;
+
+        let resultStr = '';
 
         if (isMock) {
             await new Promise(r => setTimeout(r, 2000));
-            setAiAnalysis(`### 🎬 模拟分析报告\n\n**口味**: 硬核、科幻、诺兰粉\n**解析**: 您偏好高智商叙事和宏大叙事结构。\n**推荐**: 《降临》《银翼杀手2049》《奥本海默》`);
+            const mockResult: AiAnalysisResult = {
+                keywords: ["硬核科幻", "诺兰信徒", "高智商叙事", "视觉控"],
+                analysis: "您的观影品味非常独特，明显偏好宏大的叙事结构和复杂的哲学探讨。从《星际穿越》到《黑客帝国》，您对探索人类存在意义的科幻题材情有独钟。同时，给出的高分评价显示您非常看重影片的视听语言和导演的个人风格。",
+                recommendations: [
+                    { title: "降临 (Arrival)", reason: "同样的硬核科幻内核，探讨语言与时间的哲学，绝对符合您的口味。" },
+                    { title: "银翼杀手 2049", reason: "极致的视觉美学，赛博朋克风格的巅峰之作，沉浸感极强。" },
+                    { title: "奥本海默", reason: "诺兰导演的最新力作，虽然是传记片，但叙事手法依然令人着迷。" }
+                ]
+            };
+            setAiAnalysis(mockResult);
+            setIsAnalyzing(false);
+            return;
         } else {
-            // Real API Integration (Simplified for brevity)
             const endpoint = appSettings.aiProvider === 'OpenAI' ? 'https://api.openai.com/v1/chat/completions' : 
                              appSettings.aiProvider === 'DeepSeek' ? 'https://api.deepseek.com/chat/completions' :
                              `https://generativelanguage.googleapis.com/v1beta/models/${appSettings.aiModel}:generateContent?key=${appSettings.aiApiKey}`;
             
             const body = appSettings.aiProvider === 'Gemini' ? 
-              { contents: [{ parts: [{ text: systemPrompt + "\n\n" + movieDataStr }] }] } :
+              { contents: [{ parts: [{ text: systemPrompt + "\n\n用户数据:\n" + movieDataStr }] }] } :
               { model: appSettings.aiModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: movieDataStr }] };
 
             const res = await fetch(endpoint, {
@@ -784,12 +889,31 @@ export default function CineTrackApp() {
                 headers: { 'Content-Type': 'application/json', ...(appSettings.aiProvider !== 'Gemini' && { 'Authorization': `Bearer ${appSettings.aiApiKey}` }) },
                 body: JSON.stringify(body)
             });
+            
             const data = await res.json();
-            const text = appSettings.aiProvider === 'Gemini' ? data.candidates?.[0]?.content?.parts?.[0]?.text : data.choices?.[0]?.message?.content;
-            setAiAnalysis(text || "API 返回格式异常");
+            
+            if (!res.ok) {
+                throw new Error(data.error?.message || "API 请求失败");
+            }
+
+            resultStr = appSettings.aiProvider === 'Gemini' 
+                ? data.candidates?.[0]?.content?.parts?.[0]?.text 
+                : data.choices?.[0]?.message?.content;
         }
+
+        // 清洗和解析 JSON
+        if (resultStr) {
+            // 去除可能存在的 markdown 代码块标记
+            const cleanStr = resultStr.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanStr);
+            setAiAnalysis(parsed);
+        } else {
+            throw new Error("未获取到有效返回内容");
+        }
+
     } catch (e: any) {
-        setAiAnalysis(`分析失败: ${e.message}`);
+        console.error(e);
+        setAiAnalysis(`分析失败: ${e.message}. 请检查 API Key 或网络连接。`);
     } finally {
         setIsAnalyzing(false);
     }
@@ -964,6 +1088,15 @@ export default function CineTrackApp() {
                     />
                    </div>
                    
+                   {/* Duplicate Check Button */}
+                   <button 
+                     onClick={() => setShowDuplicates(!showDuplicates)}
+                     className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border transition ${showDuplicates ? 'bg-orange-500/20 border-orange-500 text-orange-300' : 'bg-slate-950 border-slate-700 text-slate-400 hover:text-white'}`}
+                     title="筛选重复或相似的影片"
+                   >
+                     <Files size={16} /> 查重
+                   </button>
+
                    {/* Genre Filter (NEW) */}
                    <select 
                       value={filters.tag}
@@ -1013,19 +1146,42 @@ export default function CineTrackApp() {
                         <div className="flex items-center justify-center h-full text-slate-600 bg-slate-800"><Film size={40} /></div>
                       )}
                       
-                      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1 shadow-lg border border-white/10">
+                      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1 shadow-lg border border-white/10 z-10">
                         <Star size={14} className="text-yellow-400 fill-current" />
                         <span className="text-white font-bold text-sm">{movie.rating}</span>
                       </div>
 
                        {movie.year && (
-                        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs text-white font-medium border border-white/10">
+                        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs text-white font-medium border border-white/10 z-10">
                           {movie.year}
                         </div>
                       )}
                       
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80"></div>
-                      <div className="absolute bottom-0 left-0 p-4 w-full">
+                      {/* === NEW HOVER OVERLAY START === */}
+                      <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm p-5 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out z-20 flex flex-col translate-y-4 group-hover:translate-y-0">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-700/50">
+                          <Quote size={14} className="text-blue-400" />
+                          <span className="text-xs font-bold text-slate-200">简介与笔记</span>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto scrollbar-none">
+                          <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                            {movie.comment || <span className="italic opacity-50">暂无内容...</span>}
+                          </p>
+                        </div>
+
+                        {movie.tags && movie.tags.length > 0 && (
+                          <div className="mt-3 pt-2 border-t border-slate-700/50 flex flex-wrap gap-1.5">
+                            {movie.tags.slice(0, 6).map(t => (
+                              <span key={t} className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">{t}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {/* === NEW HOVER OVERLAY END === */}
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80 group-hover:opacity-0 transition-opacity duration-300"></div>
+                      <div className="absolute bottom-0 left-0 p-4 w-full group-hover:opacity-0 transition-opacity duration-300">
                          <div className="flex gap-2 mb-1">
                             <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded shadow">{movie.type}</span>
                             {movie.duration && <span className="text-[10px] bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded shadow flex items-center gap-1"><Clock size={10}/> {movie.duration}m</span>}
@@ -1078,7 +1234,7 @@ export default function CineTrackApp() {
                            <Edit2 size={14} /> 编辑
                          </button>
                          <button 
-                           onClick={(e) => { e.stopPropagation(); handleDelete(movie.id); }} 
+                           onClick={(e) => { e.stopPropagation(); triggerDelete(movie); }} 
                            className="text-slate-400 hover:text-red-400 text-xs flex items-center gap-1.5 transition py-1 px-2 rounded hover:bg-slate-800"
                          >
                            <Trash2 size={14} /> 删除
@@ -1134,18 +1290,69 @@ export default function CineTrackApp() {
                      )}
                    </div>
                  ) : (
-                   <div className="prose prose-invert max-w-none">
-                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="text-xl font-bold text-purple-400">分析完成</h3>
-                        <button onClick={() => setAiAnalysis(null)} className="text-xs text-slate-500 hover:text-white">重新分析</button>
-                     </div>
-                     <div className="whitespace-pre-line text-slate-300 leading-relaxed bg-slate-950/50 p-6 rounded-xl border border-slate-800/50">
-                       {aiAnalysis}
-                     </div>
-                     <div className="mt-8 pt-6 border-t border-slate-800 flex items-center justify-between text-sm text-slate-500">
-                       <span>数据来源: 本地记录</span>
-                       <span>模型服务: {appSettings.aiProvider}</span>
-                     </div>
+                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+                     {typeof aiAnalysis === 'string' ? (
+                        <div className="p-4 bg-red-900/20 border border-red-800/50 rounded-lg text-red-200">
+                            {aiAnalysis}
+                        </div>
+                     ) : (
+                        <>
+                            {/* Keywords Section */}
+                            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
+                                <h3 className="text-sm font-bold text-purple-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Sparkles size={16} /> 您的观影画像
+                                </h3>
+                                <div className="flex flex-wrap gap-3">
+                                    {aiAnalysis.keywords.map((keyword, i) => (
+                                        <span key={i} className="px-4 py-2 rounded-full bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 text-purple-200 font-medium shadow-sm">
+                                            {keyword}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Deep Analysis Section */}
+                            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-6 opacity-10">
+                                    <Quote size={80} className="text-white" />
+                                </div>
+                                <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <BrainCircuit size={16} /> 深度解读
+                                </h3>
+                                <p className="text-slate-300 leading-loose text-lg font-light relative z-10">
+                                    {aiAnalysis.analysis}
+                                </p>
+                            </div>
+
+                            {/* Recommendations Section */}
+                            <div>
+                                <h3 className="text-sm font-bold text-green-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Lightbulb size={16} /> 专属推荐
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {aiAnalysis.recommendations.map((rec, i) => (
+                                        <div key={i} className="bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-green-500/30 transition group h-full flex flex-col">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 group-hover:bg-green-900/30 group-hover:text-green-400 transition">
+                                                    <Film size={18} />
+                                                </div>
+                                                <h4 className="font-bold text-white group-hover:text-green-400 transition">{rec.title}</h4>
+                                            </div>
+                                            <p className="text-sm text-slate-400 leading-relaxed flex-1">
+                                                {rec.reason}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <div className="flex justify-center pt-8">
+                                <button onClick={() => setAiAnalysis(null)} className="text-sm text-slate-500 hover:text-white transition flex items-center gap-2">
+                                    <X size={14} /> 清除分析结果
+                                </button>
+                            </div>
+                        </>
+                     )}
                    </div>
                  )}
                </div>
@@ -1172,6 +1379,15 @@ export default function CineTrackApp() {
           initialSettings={appSettings} 
           movies={movies}
           setMovies={setMovies}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {movieToDelete && (
+        <DeleteConfirmModal 
+          movie={movieToDelete}
+          onClose={() => setMovieToDelete(null)}
+          onConfirm={confirmDelete}
         />
       )}
       
