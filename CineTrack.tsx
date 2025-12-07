@@ -34,7 +34,9 @@ import {
   Quote,
   Lightbulb,
   Files,
-  AlertTriangle
+  AlertTriangle,
+  Layers, 
+  Tv 
 } from 'lucide-react';
 
 /**
@@ -44,25 +46,28 @@ type MovieType = 'Movie' | 'Series' | 'Anime' | 'Documentary';
 
 interface MovieRecord {
   id: string;
+  tmdbId?: number; // 新增：保存 TMDB ID 以便获取季度信息
   title: string;
   originalTitle?: string;
   type: MovieType;
   coverUrl: string;
-  rating: number; // 用户评分 0-10
-  doubanRating: number; // 外部评分 (TMDB/豆瓣)
+  rating: number; 
+  doubanRating: number; 
   watchDate: string;
-  tags: string[]; // 对应 Genres
+  tags: string[]; 
   comment: string;
   actors: string[];
-  director?: string; // 新增导演
+  director?: string; 
   year: number;
-  duration?: number; // minutes
+  duration?: number; 
+  season?: number; 
+  episodes?: number; 
 }
 
 interface FilterState {
   search: string;
   type: MovieType | 'All';
-  tag: string; // 新增类型筛选
+  tag: string; 
   sort: 'date_desc' | 'date_asc' | 'rating_desc' | 'rating_asc';
 }
 
@@ -83,13 +88,14 @@ interface AiAnalysisResult {
 }
 
 /**
- * 模拟数据库 (已修复：补充 watchDate 防止崩溃)
+ * 模拟数据库
  */
 const MOCK_DB: Partial<MovieRecord>[] = [
-  { title: '星际穿越', originalTitle: 'Interstellar', type: 'Movie', year: 2014, doubanRating: 9.4, actors: ['马修·麦康纳', '安妮·海瑟薇'], director: '克里斯托弗·诺兰', tags: ['科幻', '剧情', '冒险'], duration: 169, watchDate: '2023-11-15', coverUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80&w=300' },
-  { title: '绝命毒师', originalTitle: 'Breaking Bad', type: 'Series', year: 2008, doubanRating: 9.8, actors: ['布莱恩·科兰斯顿', '亚伦·保尔'], director: '文斯·吉里根', tags: ['犯罪', '剧情'], duration: 45, watchDate: '2023-10-01', coverUrl: 'https://images.unsplash.com/photo-1568819317551-31051b37f69f?auto=format&fit=crop&q=80&w=300' },
-  { title: '千与千寻', originalTitle: '千と千尋の神隠し', type: 'Anime', year: 2001, doubanRating: 9.4, actors: ['柊瑠美', '入野自由'], director: '宫崎骏', tags: ['动画', '奇幻'], duration: 125, watchDate: '2023-09-20', coverUrl: 'https://images.unsplash.com/photo-1560167016-022b78a0258e?auto=format&fit=crop&q=80&w=300' },
-  { title: '地球脉动', originalTitle: 'Planet Earth', type: 'Documentary', year: 2006, doubanRating: 9.9, actors: ['大卫·爱登堡'], director: '阿拉斯泰尔·福瑟吉尔', tags: ['纪录片', '自然'], duration: 60, watchDate: '2023-08-15', coverUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=300' },
+  { title: '星际穿越', originalTitle: 'Interstellar', type: 'Movie', year: 2014, doubanRating: 9.4, actors: ['马修·麦康纳', '安妮·海瑟薇'], director: '克里斯托弗·诺兰', tags: ['科幻', '剧情', '冒险'], duration: 169, episodes: 1, watchDate: '2023-11-15', coverUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80&w=300' },
+  { title: '绝命毒师', originalTitle: 'Breaking Bad', type: 'Series', season: 1, year: 2008, doubanRating: 9.8, actors: ['布莱恩·科兰斯顿', '亚伦·保尔'], director: '文斯·吉里根', tags: ['犯罪', '剧情'], duration: 45, episodes: 7, watchDate: '2023-10-01', coverUrl: 'https://images.unsplash.com/photo-1568819317551-31051b37f69f?auto=format&fit=crop&q=80&w=300' },
+  { title: '绝命毒师', originalTitle: 'Breaking Bad', type: 'Series', season: 2, year: 2009, doubanRating: 9.9, actors: ['布莱恩·科兰斯顿', '亚伦·保尔'], director: '文斯·吉里根', tags: ['犯罪', '剧情'], duration: 47, episodes: 13, watchDate: '2023-10-15', coverUrl: 'https://images.unsplash.com/photo-1568819317551-31051b37f69f?auto=format&fit=crop&q=80&w=300' },
+  { title: '千与千寻', originalTitle: '千と千尋の神隠し', type: 'Anime', year: 2001, doubanRating: 9.4, actors: ['柊瑠美', '入野自由'], director: '宫崎骏', tags: ['动画', '奇幻'], duration: 125, episodes: 1, watchDate: '2023-09-20', coverUrl: 'https://images.unsplash.com/photo-1560167016-022b78a0258e?auto=format&fit=crop&q=80&w=300' },
+  { title: '地球脉动', originalTitle: 'Planet Earth', type: 'Documentary', season: 1, year: 2006, doubanRating: 9.9, actors: ['大卫·爱登堡'], director: '阿拉斯泰尔·福瑟吉尔', tags: ['纪录片', '自然'], duration: 60, episodes: 11, watchDate: '2023-08-15', coverUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=300' },
 ];
 
 /**
@@ -145,7 +151,6 @@ const DonutChart = ({ data }: { data: { label: string; value: number; color: str
           const y2 = 50 + 40 * Math.sin((Math.PI * (currentAngle + sliceAngle)) / 180);
           
           const largeArcFlag = sliceAngle > 180 ? 1 : 0;
-          // 处理单个数据占100%的情况
           const pathData = total === item.value 
             ? `M 50 10 A 40 40 0 1 1 49.99 10 Z` 
             : `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
@@ -169,7 +174,6 @@ const SettingsModal = ({ onClose, onSave, initialSettings, movies, setMovies }: 
     const [localSettings, setLocalSettings] = useState(initialSettings);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // 确保 localSettings 中的字段不为 undefined
     useEffect(() => {
         setLocalSettings((prev: any) => ({
             tmdbApiKey: '',
@@ -281,7 +285,7 @@ const DeleteConfirmModal = ({
           <div>
             <h3 className="text-xl font-bold text-white mb-2">确认删除记录?</h3>
             <p className="text-sm text-slate-400">
-              您即将删除影片 <span className="text-white font-medium">《{movie.title}》</span>
+              您即将删除影片 <span className="text-white font-medium">《{movie.title}》{movie.season ? `(第${movie.season}季)` : ''}</span>
               <br />此操作无法撤销。
             </p>
           </div>
@@ -328,14 +332,18 @@ const AddEditModal = ({
       tags: [],
       coverUrl: '',
       actors: [],
-      director: ''
+      director: '',
+      season: undefined,
+      episodes: 1
     }
   );
   
+  // 监听编辑对象变化
   useEffect(() => {
     if (editingMovie) {
         setFormData(editingMovie);
     } else {
+        // 重置为初始状态
         setFormData({
             type: 'Movie',
             rating: 8,
@@ -343,10 +351,45 @@ const AddEditModal = ({
             tags: [],
             coverUrl: '',
             actors: [],
-            director: ''
+            director: '',
+            season: undefined,
+            episodes: 1
         });
     }
   }, [editingMovie]);
+
+  // --- 新增：监听季数变化，自动抓取该季度的海报和简介 ---
+  useEffect(() => {
+    // 仅在有 TMDB API Key、有 TMDB ID、非电影类型、且季数有效时触发
+    if (!appSettings.tmdbApiKey || !formData.tmdbId || !formData.season || formData.type === 'Movie') {
+        return;
+    }
+
+    const fetchSeasonDetails = async () => {
+        try {
+            // TMDB 获取特定季度的 API
+            const res = await fetch(`https://api.themoviedb.org/3/tv/${formData.tmdbId}/season/${formData.season}?api_key=${appSettings.tmdbApiKey}&language=zh-CN`);
+            if (res.ok) {
+                const data = await res.json();
+                setFormData(prev => ({
+                    ...prev,
+                    // 只有当 API 返回有效数据时才更新
+                    coverUrl: data.poster_path ? `${TMDB_IMAGE_BASE}${data.poster_path}` : prev.coverUrl,
+                    comment: data.overview || prev.comment, // 更新简介为该季度简介
+                    year: data.air_date ? new Date(data.air_date).getFullYear() : prev.year
+                }));
+            }
+        } catch (error) {
+            console.error("Failed to fetch season details:", error);
+        }
+    };
+
+    // 使用防抖，避免快速输入数字时频繁请求
+    const timer = setTimeout(fetchSeasonDetails, 600);
+    return () => clearTimeout(timer);
+
+  }, [formData.season, formData.tmdbId, formData.type, appSettings.tmdbApiKey]);
+
 
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -386,8 +429,17 @@ const AddEditModal = ({
       const actors = data.credits?.cast?.slice(0, 5).map((p: any) => p.name) || [];
       const tags = data.genres?.map((g: any) => g.name) || [];
       const duration = mediaType === 'movie' ? data.runtime : (data.episode_run_time?.[0] || 0);
+      const episodes = mediaType === 'movie' ? 1 : (data.number_of_episodes || 1); 
 
-      return { director, actors, tags, duration, overview: data.overview, poster_path: data.poster_path, title: mediaType === 'movie' ? data.title : data.name, original_title: mediaType === 'movie' ? data.original_title : data.original_name, year: new Date(mediaType === 'movie' ? data.release_date : data.first_air_date).getFullYear(), vote_average: data.vote_average };
+      return { 
+        director, actors, tags, duration, episodes,
+        overview: data.overview, 
+        poster_path: data.poster_path, 
+        title: mediaType === 'movie' ? data.title : data.name, 
+        original_title: mediaType === 'movie' ? data.original_title : data.original_name, 
+        year: new Date(mediaType === 'movie' ? data.release_date : data.first_air_date).getFullYear(), 
+        vote_average: data.vote_average 
+      };
     } catch (error) {
       console.error("Fetch Details Error:", error);
       return null;
@@ -417,6 +469,7 @@ const AddEditModal = ({
     if (details) {
       setFormData(prev => ({
         ...prev,
+        tmdbId: item.id, // 保存 TMDB ID
         title: details.title,
         originalTitle: details.original_title,
         type: item.media_type === 'movie' ? 'Movie' : 'Series',
@@ -427,7 +480,9 @@ const AddEditModal = ({
         actors: details.actors,
         director: details.director,
         duration: details.duration,
-        comment: details.overview || ''
+        comment: details.overview || '',
+        episodes: details.episodes,
+        season: item.media_type === 'movie' ? undefined : 1 // 剧集默认选中第一季，触发 useEffect 获取第一季信息
       }));
     }
     setSearchSuggestions([]);
@@ -536,8 +591,29 @@ const AddEditModal = ({
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" 
                   />
                 </div>
+                {/* 季数输入 (非电影可见) */}
+                {(formData.type !== 'Movie') && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1 flex items-center justify-between">
+                        <span>当前季数</span>
+                        {formData.tmdbId && <span className="text-[10px] text-green-400">自动同步封面</span>}
+                    </label>
+                    <input 
+                      type="number"
+                      min="1"
+                      value={formData.season || ''} 
+                      onChange={e => setFormData({...formData, season: e.target.value ? parseInt(e.target.value) : undefined})}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" 
+                      placeholder="选填"
+                    />
+                  </div>
+                )}
+                
+                {/* 时长输入 */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">时长 (分钟)</label>
+                  <label className="block text-sm font-medium text-slate-400 mb-1">
+                    {formData.type === 'Movie' ? '时长 (分钟)' : '单集时长 (分钟)'}
+                  </label>
                   <input 
                     type="number"
                     value={formData.duration || ''} 
@@ -545,6 +621,21 @@ const AddEditModal = ({
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" 
                   />
                 </div>
+
+                {/* 集数输入 (非电影可见) */}
+                {formData.type !== 'Movie' && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1">观看集数</label>
+                    <input 
+                      type="number"
+                      min="1"
+                      value={formData.episodes || ''} 
+                      onChange={e => setFormData({...formData, episodes: parseInt(e.target.value)})}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" 
+                      placeholder="1"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -800,6 +891,15 @@ export default function CineTrackApp() {
     const typeCount: Record<string, number> = {};
     const tagCount: Record<string, number> = {}; // Tag frequency
     
+    // Calculate total duration: for movies it's duration, for series it's duration * episodes
+    const totalDuration = movies.reduce((acc, m) => {
+      const episodes = m.episodes || 1;
+      const duration = m.duration || 0;
+      // If it's a Movie, usually episodes is 1, but let's be strict
+      const itemTotal = m.type === 'Movie' ? duration : duration * episodes;
+      return acc + itemTotal;
+    }, 0);
+
     movies.forEach(m => { 
       typeCount[m.type] = (typeCount[m.type] || 0) + 1; 
       m.tags?.forEach(t => {
@@ -824,7 +924,7 @@ export default function CineTrackApp() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
 
-    return { total, avgRating, typeCount, trendData, labels: last6Months, topTags };
+    return { total, avgRating, typeCount, trendData, labels: last6Months, topTags, totalDuration };
   }, [movies]);
 
   // AI Analysis Logic
@@ -996,10 +1096,10 @@ JSON 结构如下：
                 <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
                   <div className="p-2 bg-purple-500/10 rounded-lg w-fit mb-3"><Clock className="text-purple-500" size={20} /></div>
                   <div className="text-3xl font-bold text-white">
-                    {Math.round(movies.reduce((acc, m) => acc + (m.duration || 0), 0) / 60)}
+                    {Math.round(stats.totalDuration / 60)}
                     <span className="text-sm font-normal text-slate-500 ml-1">小时</span>
                   </div>
-                  <div className="text-sm text-slate-500">总时长</div>
+                  <div className="text-sm text-slate-500">总时长 (估算)</div>
                 </div>
                 
                 <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
@@ -1151,11 +1251,19 @@ JSON 结构如下：
                         <span className="text-white font-bold text-sm">{movie.rating}</span>
                       </div>
 
-                       {movie.year && (
-                        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs text-white font-medium border border-white/10 z-10">
-                          {movie.year}
-                        </div>
-                      )}
+                       {/* Season Badge (Top Left) */}
+                       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                         {movie.year && (
+                          <div className="bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs text-white font-medium border border-white/10 w-fit">
+                            {movie.year}
+                          </div>
+                         )}
+                         {movie.season && (
+                           <div className="bg-orange-600/90 backdrop-blur-md px-2 py-1 rounded-md text-xs text-white font-bold border border-orange-500/50 w-fit flex items-center gap-1 shadow-lg shadow-orange-900/20">
+                             <Layers size={10} /> S{movie.season}
+                           </div>
+                         )}
+                       </div>
                       
                       {/* === NEW HOVER OVERLAY START === */}
                       <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm p-5 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out z-20 flex flex-col translate-y-4 group-hover:translate-y-0">
@@ -1184,7 +1292,13 @@ JSON 结构如下：
                       <div className="absolute bottom-0 left-0 p-4 w-full group-hover:opacity-0 transition-opacity duration-300">
                          <div className="flex gap-2 mb-1">
                             <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded shadow">{movie.type}</span>
-                            {movie.duration && <span className="text-[10px] bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded shadow flex items-center gap-1"><Clock size={10}/> {movie.duration}m</span>}
+                            {movie.duration && (
+                              <span className="text-[10px] bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                                <Clock size={10}/> 
+                                {movie.duration}m
+                                {(movie.episodes && movie.episodes > 1) && ` × ${movie.episodes}集`}
+                              </span>
+                            )}
                          </div>
                          <h3 className="text-lg font-bold text-white truncate drop-shadow-md">{movie.title}</h3>
                          <div className="flex items-center gap-3 text-xs text-slate-300 mt-1 font-medium opacity-90">
@@ -1196,6 +1310,13 @@ JSON 结构如下：
                     {/* Details */}
                     <div className="p-4 flex-1 flex flex-col justify-between bg-slate-900">
                       <div className="mb-4 space-y-2">
+                        
+                        {/* Title with Season info */}
+                        <div className="flex items-center justify-between">
+                           <h4 className="font-bold text-white truncate text-sm" title={movie.title}>{movie.title}</h4>
+                           {movie.season && <span className="text-[10px] text-orange-400 font-mono bg-orange-900/30 px-1 rounded">第{movie.season}季</span>}
+                        </div>
+
                         {/* Director & Cast */}
                         <div className="space-y-1">
                             {movie.director && (
